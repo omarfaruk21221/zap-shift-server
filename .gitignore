@@ -1,0 +1,5 @@
+node_modules
+.env
+zap-shift-c9e57-firebase.json
+.vercel
+.env*.local
