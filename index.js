@@ -11,10 +11,21 @@ const port = process.env.PORT || 3000
 
 // ------ firebase admin ---------
 const admin = require("firebase-admin");
-const serviceAccount = require("./zap-shift-c9e57-firebase.json");
-admin.initializeApp({
-    credential: admin.credential.cert(serviceAccount)
-});
+
+let serviceAccount;
+try {
+    serviceAccount = process.env.FIREBASE_SERVICE_ACCOUNT
+        ? JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT)
+        : require("./zap-shift-c9e57-firebase.json");
+} catch (error) {
+    console.error("Firebase Service Account error:", error.message);
+}
+
+if (serviceAccount && !admin.apps.length) {
+    admin.initializeApp({
+        credential: admin.credential.cert(serviceAccount)
+    });
+}
 
 // --genared tokon ---
 const crypto = require("crypto");
@@ -36,7 +47,7 @@ const verifyFBToken = async (req, res, next) => {
     const token = req.headers.authorization
     // console.log('headers in the middleware', token)
     if (!token) {
-        return res.status(401).send({ massage: 'unauthorization access' })
+        return res.status(401).send({ message: 'unauthorized access' })
     }
     try {
         const idToken = token.split(" ")[1]
@@ -45,8 +56,8 @@ const verifyFBToken = async (req, res, next) => {
         req.decode_email = decode.email
         next()
     }
-    catch (err) {
-        return res.status(401).send({ massage: "unathorized access!!" })
+    catch (error) {
+        return res.status(401).send({ message: "unauthorized access!!" })
     }
     // const tol
 
