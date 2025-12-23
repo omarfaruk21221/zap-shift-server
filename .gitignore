@@ -3,3 +3,4 @@ node_modules
 zap-shift-c9e57-firebase.json
 .vercel
 .env*.local
+zap-shift-c9e57-firebase-adminsdk.json
