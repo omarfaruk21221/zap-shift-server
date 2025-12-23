@@ -9,28 +9,13 @@ const stripe = require('stripe')(process.env.STRIPE);
 
 const port = process.env.PORT || 3000
 
-// ------ firebase admin ---------
 const admin = require("firebase-admin");
-
-let serviceAccount;
-try {
-    serviceAccount = process.env.FIREBASE_SERVICE_ACCOUNT
-        ? JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT)
-        : require("./zap-shift-c9e57-firebase.json");
-} catch (error) {
-    console.error("Firebase Service Account error:", error.message);
-}
-
-if (serviceAccount && !admin.apps.length) {
-    admin.initializeApp({
-        credential: admin.credential.cert(serviceAccount)
-    });
-}
-
-// --genared tokon ---
+const decoded = Buffer.from(process.env.FIREBASE_SERVICE_ACCOUNT, 'base64').toString('utf8')
+const serviceAccount = JSON.parse(decoded);
+admin.initializeApp({
+    credential: admin.credential.cert(serviceAccount)
+});
 const crypto = require("crypto");
-const { access } = require('fs');
-
 function generateTrackingId() {
     const prefix = "PRCL"; // your brand prefix
     const date = new Date().toISOString().slice(0, 10).replace(/-/g, ""); // YYYYMMDD
@@ -39,9 +24,8 @@ function generateTrackingId() {
 }
 
 /// middleware
-app.use(express.json())
 app.use(cors())
-
+app.use(express.json())
 
 const verifyFBToken = async (req, res, next) => {
     const token = req.headers.authorization
