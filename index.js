@@ -90,8 +90,11 @@ async function run() {
         //====== user related Api ======
         app.get('/users', verifyFBToken, async (req, res) => {
             try {
-                const searchText = req.query.searchText
+                const { email, searchText } = req.query
                 const query = {}
+                if (email) {
+                    query.email = email
+                }
                 if (searchText) {
                     query.$or = [
                         { displayName: { $regex: searchText, $options: 'i' } },
