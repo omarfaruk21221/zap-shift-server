@@ -78,319 +78,395 @@ async function run() {
         const riderCollection = db.collection("riders");
         //// middleware with database
         const verifyAdmin = async (req, res, next) => {
-            const email = req.decode_email;
-            const query = { email }
-            const user = await userCollection.findOne(query)
-            if (!user || user.role !== 'admin') {
-                return res.status(403).send({ massage: 'forbidden access' })
+            try {
+                const email = req.decode_email;
+                const query = { email }
+                const user = await userCollection.findOne(query)
+                if (!user || user.role !== 'admin') {
+                    return res.status(403).send({ message: 'forbidden access' })
+                }
+                next()
+            } catch (error) {
+                console.error('Error in verifyAdmin:', error);
+                res.status(500).send({ message: 'Internal Server Error' });
             }
-            next()
         }
 
         //====== user related Api ======
         app.get('/users', verifyFBToken, async (req, res) => {
-            const searchText = req.query.searchText
-            const query = {}
-            if (searchText) {
-                // query.displayName = { $regex: searchText, $options: 'i' }
-                query.$or = [
-                    { displayName: { $regex: searchText, $options: 'i' } },
-                    { email: { $regex: searchText, $options: 'i' } }
-                ]
+            try {
+                const searchText = req.query.searchText
+                const query = {}
+                if (searchText) {
+                    query.$or = [
+                        { displayName: { $regex: searchText, $options: 'i' } },
+                        { email: { $regex: searchText, $options: 'i' } }
+                    ]
+                }
+                const cursor = userCollection.find(query).sort({ createdAt: -1 }).limit(3)
+                const result = await cursor.toArray()
+                res.send(result)
+            } catch (error) {
+                console.error('Error in GET /users:', error);
+                res.status(500).send({ message: 'Internal Server Error', error: error.message });
             }
-            const cursor = userCollection.find(query).sort({ createdAt: -1 }).limit(3)
-            const result = await cursor.toArray()
-            res.send(result)
         })
 
         // app.get('/users/:id', async (req, res) => {
 
         // })
         app.get('/users/:email', async (req, res) => {
-            const email = req.params.email;
-            const user = await userCollection.findOne({ email });
-            res.send({ role: user?.role || 'user' });
+            try {
+                const email = req.params.email;
+                const user = await userCollection.findOne({ email });
+                res.send({ role: user?.role || 'user' });
+            } catch (error) {
+                console.error('Error in GET /users/:email:', error);
+                res.status(500).send({ message: 'Internal Server Error', error: error.message });
+            }
         });
 
         app.post('/users', async (req, res) => {
-            const user = req.body
-            user.role = 'user'
-            user.createdAt = new Date()
-            const email = user.email
-            const userExist = await userCollection.findOne({ email: email });
-            if (userExist) {
-                return res.send({ massage: "User Existed" })
+            try {
+                const user = req.body
+                user.role = 'user'
+                user.createdAt = new Date()
+                const email = user.email
+                const userExist = await userCollection.findOne({ email: email });
+                if (userExist) {
+                    return res.send({ message: "User Existed" })
+                }
+                const result = await userCollection.insertOne(user)
+                res.send(result)
+            } catch (error) {
+                console.error('Error in POST /users:', error);
+                res.status(500).send({ message: 'Internal Server Error', error: error.message });
             }
-            const result = await userCollection.insertOne(user)
-            res.send(result)
         })
 
         app.patch('/users/:id/role', verifyFBToken, verifyAdmin, async (req, res) => {
-            const id = req.params.id
-            const roleInfo = req.body
-            const query = { _id: new ObjectId(id) }
-            const updatedDoc = {
-                $set: {
-                    role: roleInfo.role
+            try {
+                const id = req.params.id
+                const roleInfo = req.body
+                const query = { _id: new ObjectId(id) }
+                const updatedDoc = {
+                    $set: {
+                        role: roleInfo.role
+                    }
                 }
+                const result = await userCollection.updateOne(query, updatedDoc)
+                res.send(result)
+            } catch (error) {
+                console.error('Error in PATCH /users/:id/role:', error);
+                res.status(500).send({ message: 'Internal Server Error', error: error.message });
             }
-            const result = await userCollection.updateOne(query, updatedDoc)
-            res.send(result)
         })
         ///// Rider APIs
         // ---create Rider post ---
         app.post('/riders', async (req, res) => {
-            const riderInfo = req.body
-            riderInfo.status = "pending.."
-            riderInfo.createdAt = new Date()
-            const result = await riderCollection.insertOne(riderInfo)
-            res.send(result)
+            try {
+                const riderInfo = req.body
+                riderInfo.status = "pending.."
+                riderInfo.createdAt = new Date()
+                const result = await riderCollection.insertOne(riderInfo)
+                res.send(result)
+            } catch (error) {
+                console.error('Error in POST /riders:', error);
+                res.status(500).send({ message: 'Internal Server Error', error: error.message });
+            }
         })
         // ---get  Rider data status bage ---
         app.get('/riders', async (req, res) => {
-            const { status, district, workStatus } = req.query
-            const query = {}
-            if (status) {
-                query.status = status
+            try {
+                const { status, district, workStatus } = req.query
+                const query = {}
+                if (status) {
+                    query.status = status
+                }
+                if (district) {
+                    query.riderDistrict = district
+                }
+                if (workStatus) {
+                    query.workStatus = workStatus
+                }
+                const cursor = riderCollection.find(query)
+                const result = await cursor.toArray()
+                res.send(result)
+            } catch (error) {
+                console.error('Error in GET /riders:', error);
+                res.status(500).send({ message: 'Internal Server Error', error: error.message });
             }
-            if (district) {
-                query.riderDistrict = district
-            }
-            if (workStatus) {
-                query.workStatus = workStatus
-            }
-            const cursor = riderCollection.find(query)
-            const result = await cursor.toArray()
-            res.send(result)
         })
         // upadate status of riders
         app.patch('/riders/:id', verifyFBToken, verifyAdmin, async (req, res) => {
-            const id = req.params.id
-            const status = req.body.status
-            const query = { _id: new ObjectId(id) }
-            const updateDoc = {
-                $set: {
-                    status: status,
-                    workStatus: 'available'
+            try {
+                const id = req.params.id
+                const status = req.body.status
+                const query = { _id: new ObjectId(id) }
+                const updateDoc = {
+                    $set: {
+                        status: status,
+                        workStatus: 'available'
+                    }
                 }
-            }
-            const result = await riderCollection.updateOne(query, updateDoc)
-            if (status === 'approved') {
-                const email = req.body.email
-                const userQuery = { email }
-                const updateUser = {
-                    $set: { role: 'rider' }
+                const result = await riderCollection.updateOne(query, updateDoc)
+                if (status === 'approved') {
+                    const email = req.body.email
+                    const userQuery = { email }
+                    const updateUser = {
+                        $set: { role: 'rider' }
+                    }
+                    const result = await userCollection.updateOne(userQuery, updateUser);
+                    return res.send(result)
                 }
-                const result = await userCollection.updateOne(userQuery, updateUser);
                 res.send(result)
+            } catch (error) {
+                console.error('Error in PATCH /riders/:id:', error);
+                res.status(500).send({ message: 'Internal Server Error', error: error.message });
             }
-            res.send(result)
         })
 
         /// reject rider api
         app.delete(`/riders/:id`, async (req, res) => {
-            const id = req.params.id
-            const query = { _id: new ObjectId(id) }
-            const result = await riderCollection.deleteOne(query)
-            res.send(result)
+            try {
+                const id = req.params.id
+                const query = { _id: new ObjectId(id) }
+                const result = await riderCollection.deleteOne(query)
+                res.send(result)
+            } catch (error) {
+                console.error('Error in DELETE /riders/:id:', error);
+                res.status(500).send({ message: 'Internal Server Error', error: error.message });
+            }
         })
 
         // --- parcel api ---
         app.get('/parcels', async (req, res) => {
-            // console.log(res)
-            const query = {}
-            const { email, deliveryStatus } = req.query
-            // // parcel?email=&name=
-            if (email) {
-                query.senderEmail = email
+            try {
+                const query = {}
+                const { email, deliveryStatus } = req.query
+                if (email) {
+                    query.senderEmail = email
+                }
+                if (deliveryStatus) {
+                    query.deliveryStatus = deliveryStatus
+                }
+                const options = { sort: { createdAt: -1 } }
+                const cursor = parcelCollection.find(query, options)
+                const result = await cursor.toArray()
+                res.send(result)
+            } catch (error) {
+                console.error('Error in GET /parcels:', error);
+                res.status(500).send({ message: 'Internal Server Error', error: error.message });
             }
-            if (deliveryStatus) {
-                query.deliveryStatus = deliveryStatus
-            }
-            const options = { sort: { createdAt: -1 } }
-            const cursor = parcelCollection.find(query, options)
-            const result = await cursor.toArray()
-            res.send(result)
         })
         app.get(`/parcels/:id`, async (req, res) => {
-            const id = req.params.id
-            const query = { _id: new ObjectId(id) }
-            const result = await parcelCollection.findOne(query)
-            res.send(result)
+            try {
+                const id = req.params.id
+                const query = { _id: new ObjectId(id) }
+                const result = await parcelCollection.findOne(query)
+                res.send(result)
+            } catch (error) {
+                console.error('Error in GET /parcels/:id:', error);
+                res.status(500).send({ message: 'Internal Server Error', error: error.message });
+            }
         })
         app.post('/parcels', async (req, res) => {
-            // console.log(req)
-            const parcel = req.body
-            //parcel created time
-            parcel.createdAt = new Date()
-            const result = await parcelCollection.insertOne(parcel)
-            res.send(result)
+            try {
+                const parcel = req.body
+                parcel.createdAt = new Date()
+                const result = await parcelCollection.insertOne(parcel)
+                res.send(result)
+            } catch (error) {
+                console.error('Error in POST /parcels:', error);
+                res.status(500).send({ message: 'Internal Server Error', error: error.message });
+            }
         })
         app.patch('/parcels/:id', async (req, res) => {
-            const { riderId, riderName, riderEmail, rideContact } = req.body
-            const id = req.params.id
-            const query = { _id: new ObjectId(id) }
-            const updatedDoc = {
-                $set: {
-
-                    deliveryStatus: 'driver_assigned',
-                    riderId: riderId,
-                    riderName: riderName,
-                    riderEmail: riderEmail,
-                    rideContact: rideContact
+            try {
+                const { riderId, riderName, riderEmail, rideContact } = req.body
+                const id = req.params.id
+                const query = { _id: new ObjectId(id) }
+                const updatedDoc = {
+                    $set: {
+                        deliveryStatus: 'driver_assigned',
+                        riderId: riderId,
+                        riderName: riderName,
+                        riderEmail: riderEmail,
+                        rideContact: rideContact
+                    }
                 }
-            }
-            const result = await parcelCollection.updateOne(query, updatedDoc)
-            //// update rider information
-            const riderQuery = { _id: new ObjectId(riderId) }
-            const riderupdatedDoc = {
-                $set: {
-                    workStatus: "In_ delivery"
+                const result = await parcelCollection.updateOne(query, updatedDoc)
+                //// update rider information
+                const riderQuery = { _id: new ObjectId(riderId) }
+                const riderupdatedDoc = {
+                    $set: {
+                        workStatus: "In_ delivery"
+                    }
                 }
+                const riderResult = await riderCollection.updateOne(riderQuery, riderupdatedDoc)
+                res.send(riderResult)
+            } catch (error) {
+                console.error('Error in PATCH /parcels/:id:', error);
+                res.status(500).send({ message: 'Internal Server Error', error: error.message });
             }
-            const riderResult = await riderCollection.updateOne(riderQuery, riderupdatedDoc)
-            res.send(riderResult)
-
         })
         app.delete(`/parcels/:id`, async (req, res) => {
-            const id = req.params.id
-            const query = { _id: new ObjectId(id) }
-            const result = await parcelCollection.deleteOne(query)
-            res.send(result)
+            try {
+                const id = req.params.id
+                const query = { _id: new ObjectId(id) }
+                const result = await parcelCollection.deleteOne(query)
+                res.send(result)
+            } catch (error) {
+                console.error('Error in DELETE /parcels/:id:', error);
+                res.status(500).send({ message: 'Internal Server Error', error: error.message });
+            }
         })
 
         // -------payment reledated api ---------
 
         /// get payment data
         app.get('/payments', verifyFBToken, async (req, res) => {
-            const email = req.query.email;
-            const query = {}
-            // console.log(req.headers)
-            if (email) {
-                query.customerEmail = email;
-                ///cheack email adrees
-                if (email !== req.decode_email) {
-                    return res.status(403).send({ massage: 'forbiden access' })
+            try {
+                const email = req.query.email;
+                const query = {}
+                if (email) {
+                    query.customerEmail = email;
+                    if (email !== req.decode_email) {
+                        return res.status(403).send({ message: 'forbidden access' })
+                    }
                 }
+                const cursor = paymentCollection.find(query).sort({ paidAt: -1 })
+                const result = await cursor.toArray()
+                res.send(result)
+            } catch (error) {
+                console.error('Error in GET /payments:', error);
+                res.status(500).send({ message: 'Internal Server Error', error: error.message });
             }
-            const cursor = paymentCollection.find(query).sort({ paidAt: -1 })
-            const result = await cursor.toArray()
-            res.send(result)
-
         })
 
         // --PAYMENT DATA CREATE AND POST JDATA BASE ---
         app.post('/payment-checkout-session', async (req, res) => {
-            const paymentInfo = req.body
-            const amount = Number(paymentInfo.cost)
-            const session = await stripe.checkout.sessions.create({
-                line_items: [
-                    {
-                        price_data: {
-                            currency: 'usd',
-                            unit_amount: amount * 100,
-                            product_data: {
-                                name: `please pay for ${paymentInfo.parcelName}`
-                            }
+            try {
+                const paymentInfo = req.body
+                const amount = Number(paymentInfo.cost)
+                const session = await stripe.checkout.sessions.create({
+                    line_items: [
+                        {
+                            price_data: {
+                                currency: 'usd',
+                                unit_amount: amount * 100,
+                                product_data: {
+                                    name: `please pay for ${paymentInfo.parcelName}`
+                                }
+                            },
+                            quantity: 1,
                         },
-                        quantity: 1,
+                    ],
+                    mode: 'payment',
+                    metadata: {
+                        parcelId: paymentInfo.parcelId,
+                        parcelName: paymentInfo.parcelName
                     },
-                ],
-                mode: 'payment',
-                metadata: {
-                    parcelId: paymentInfo.parcelId,
-                    parcelName: paymentInfo.parcelName
-                },
-                customer_email: paymentInfo.senderEmail,
-                success_url: `${process.env.SITE_DOMAIN}/dashboard/payment-success?session_id={CHECKOUT_SESSION_ID}`,
-                cancel_url: `${process.env.SITE_DOMAIN}/dashboard/payment-cencelled`
-            })
-            res.send({ url: session.url })
+                    customer_email: paymentInfo.senderEmail,
+                    success_url: `${process.env.SITE_DOMAIN}/dashboard/payment-success?session_id={CHECKOUT_SESSION_ID}`,
+                    cancel_url: `${process.env.SITE_DOMAIN}/dashboard/payment-cencelled`
+                })
+                res.send({ url: session.url })
+            } catch (error) {
+                console.error('Error in POST /payment-checkout-session:', error);
+                res.status(500).send({ message: 'Internal Server Error', error: error.message });
+            }
         })
         // ---- old ---
         app.post('/create-checkout-session', async (req, res) => {
-            const paymentInfo = req.body
-            const amount = parseInt(paymentInfo.cost) * 100
-            const session = await stripe.checkout.sessions.create({
-                line_items: [
-                    {
-                        price_data: {
-                            currency: 'USD',
-                            unit_amount: amount,
-                            product_data: {
-                                name: paymentInfo.parcelName,
-                            }
+            try {
+                const paymentInfo = req.body
+                const amount = parseInt(paymentInfo.cost) * 100
+                const session = await stripe.checkout.sessions.create({
+                    line_items: [
+                        {
+                            price_data: {
+                                currency: 'USD',
+                                unit_amount: amount,
+                                product_data: {
+                                    name: paymentInfo.parcelName,
+                                }
+                            },
+                            quantity: 1,
                         },
-                        quantity: 1,
+                    ],
+                    customer_email: paymentInfo.senderEmail,
+                    mode: 'payment',
+                    metadata: {
+                        parcelId: paymentInfo.parcelId,
                     },
-                ],
-                customer_email: paymentInfo.senderEmail,
-                mode: 'payment',
-                metadata: {
-                    parcelId: paymentInfo.parcelId,
-                },
-                success_url: `${process.env.SITE_DOMAIN}/dashboard/payment-success`,
-                cancel_url: `${process.env.SITE_DOMAIN}/dashboard/payment-cencelled`,
-            });
-            console.log(session)
-            res.send({ url: session.url })
+                    success_url: `${process.env.SITE_DOMAIN}/dashboard/payment-success`,
+                    cancel_url: `${process.env.SITE_DOMAIN}/dashboard/payment-cencelled`,
+                });
+                res.send({ url: session.url })
+            } catch (error) {
+                console.error('Error in POST /create-checkout-session:', error);
+                res.status(500).send({ message: 'Internal Server Error', error: error.message });
+            }
         })
 
         // -payment data added and  upadet --
         app.patch('/payment-success', async (req, res) => {
-            const sessionId = req.query.session_id;
-            const session = await stripe.checkout.sessions.retrieve(sessionId)
-            const trackingId = generateTrackingId()
-
-            // ----stop data dubble ---------
-            const transactionalId = session.payment_intent
-            const query = { transactionalId: transactionalId }
-            const paymentExist = await paymentCollection.findOne(query)
-            console.log(paymentExist)
-            if (paymentExist) {
-                return res.send({
-                    massage: 'Already Exist this Parcel', transactionalId,
-                    trackingId: paymentExist.trackingId
-                })
-            }
-
-            if (session.payment_status === 'paid') {
-                const id = session.metadata.parcelId
-                const query = { _id: new ObjectId(id) }
-                const updateData = {
-                    $set: {
-                        paymentStatus: 'paid',
-                        deliveryStatus: 'pending-pickup',
-                        trackingId: trackingId
-
-                    }
+            try {
+                const sessionId = req.query.session_id;
+                if (!sessionId) {
+                    return res.status(400).send({ message: 'Session ID is required' });
                 }
-                const result = await parcelCollection.updateOne(query, updateData)
-                const paymentData = {
-                    customerEmail: session.customer_email,
-                    currency: session.currency,
-                    amount: session.amount_total / 100,
-                    paymentStatus: session.payment_status,
-                    parcelId: session.metadata.parcelId,
-                    parcelName: session.metadata.parcelName,
-                    transactionalId: session.payment_intent,
-                    trackingId: trackingId,
-                    paidAt: new Date()
+                const session = await stripe.checkout.sessions.retrieve(sessionId)
+                const trackingId = generateTrackingId()
+
+                const transactionalId = session.payment_intent
+                const query = { transactionalId: transactionalId }
+                const paymentExist = await paymentCollection.findOne(query)
+                if (paymentExist) {
+                    return res.send({
+                        message: 'Already Exist this Parcel',
+                        transactionalId,
+                        trackingId: paymentExist.trackingId
+                    })
                 }
+
                 if (session.payment_status === 'paid') {
+                    const id = session.metadata.parcelId
+                    const query = { _id: new ObjectId(id) }
+                    const updateData = {
+                        $set: {
+                            paymentStatus: 'paid',
+                            deliveryStatus: 'pending-pickup',
+                            trackingId: trackingId
+                        }
+                    }
+                    const result = await parcelCollection.updateOne(query, updateData)
+                    const paymentData = {
+                        customerEmail: session.customer_email,
+                        currency: session.currency,
+                        amount: session.amount_total / 100,
+                        paymentStatus: session.payment_status,
+                        parcelId: session.metadata.parcelId,
+                        parcelName: session.metadata.parcelName,
+                        transactionalId: session.payment_intent,
+                        trackingId: trackingId,
+                        paidAt: new Date()
+                    }
                     const paymentResult = await paymentCollection.insertOne(paymentData)
-                    res.send({
+                    return res.send({
                         success: true,
                         trackingId: trackingId,
                         transactionalId: session.payment_intent,
                         modifyParcel: result,
                         paymentInfo: paymentResult,
-
                     })
                 }
+                res.send({ success: false, message: 'Payment not completed' })
+            } catch (error) {
+                console.error('Error in PATCH /payment-success:', error);
+                res.status(500).send({ message: 'Internal Server Error', error: error.message });
             }
-            console.log('seeion :', session)
-            res.send({ success: false })
         })
 
 
